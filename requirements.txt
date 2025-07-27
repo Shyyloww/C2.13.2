@@ -1,0 +1,11 @@
+# C2 Server & Builder
+customtkinter
+Flask
+requests
+pyinstaller
+
+# Payload
+psutil
+pycryptodomex
+pywin32
+requests
