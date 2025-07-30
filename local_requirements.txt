@@ -1,8 +1,8 @@
 # For the GUI
 customtkinter
 requests
-websockets  # For live communication
-Pillow      # For image processing
+websockets==8.1  # <--- CRITICAL CHANGE
+Pillow
 
 # For the builder
 pyinstaller
@@ -13,7 +13,7 @@ pycryptodomex
 pywin32
 pyperclip
 browser-cookie3
-mss         # For screen capture
-pyautogui   # For remote control
-websockets
+mss
+pyautogui
+websockets==8.1  # <--- CRITICAL CHANGE
 Pillow

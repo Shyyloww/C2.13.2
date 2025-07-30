@@ -1,4 +1,5 @@
 Flask
 gunicorn
-Flask-Sock   # For WebSocket support in Flask
-gevent       # Required Gunicorn worker for WebSockets
+Flask-Sock
+websockets==8.1  # <--- CRITICAL CHANGE
+gevent
