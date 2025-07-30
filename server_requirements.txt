@@ -1,2 +1,4 @@
 Flask
 gunicorn
+Flask-Sock   # For WebSocket support in Flask
+gevent       # Required Gunicorn worker for WebSockets

