@@ -1,8 +1,6 @@
 # For the GUI
 customtkinter
 requests
-websockets==8.1  # <--- CRITICAL CHANGE
-Pillow
 
 # For the builder
 pyinstaller
@@ -13,7 +11,6 @@ pycryptodomex
 pywin32
 pyperclip
 browser-cookie3
-mss
-pyautogui
-websockets==8.1  # <--- CRITICAL CHANGE
-Pillow
+mss             # <--- ADD THIS LINE
+pyautogui       # <--- ADD THIS LINE
+Pillow          # <--- ADD THIS LINE

@@ -1,5 +1,5 @@
 Flask
 gunicorn
 Flask-Sock
-websockets==8.1  # <--- CRITICAL CHANGE
+websockets==8.1
 gevent

