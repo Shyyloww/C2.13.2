@@ -11,6 +11,4 @@ pycryptodomex
 pywin32
 pyperclip
 browser-cookie3
-mss             # <--- ADD THIS LINE
-pyautogui       # <--- ADD THIS LINE
-Pillow          # <--- ADD THIS LINE
+requests

